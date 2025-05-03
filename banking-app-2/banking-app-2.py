@@ -1,77 +1,105 @@
-import sqlite3
+# banking_app-2.py
+from bank_account import *
+from getpass import getpass  # Use getpass so the PIN isn't visible when typed
 
-class BankAccount:
-    def __init__(self, user_id):
-        self.user_id = user_id
-        # Connect to a local database file (created automatically if it doesn't exist)
-        self.conn = sqlite3.connect('bank.db')
-        self.cursor = self.conn.cursor()
-        self.create_table()
+# Menu shown to regular users
+def customer_menu(account_number, name):
+    account = BankAccount(account_number)
+    while True:
+        print(f"\nWelcome, {name}")
+        print("1. Check Balance")
+        print("2. Deposit")
+        print("3. Withdraw")
+        print("4. Logout")
 
-    def create_table(self):
-        #table for storing account balances
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS accounts (
-                user_id TEXT PRIMARY KEY,
-                balance REAL DEFAULT 0.0
-            )
-        ''')
-
-        #table to track deposits and withdrawals
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT,
-                amount REAL,
-                type TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-
-        self.conn.commit()
-
-    def create_account(self):
-        # create account if it doesn't exist already
-        self.cursor.execute(
-            'INSERT OR IGNORE INTO accounts (user_id, balance) VALUES (?, ?)',
-            (self.user_id, 0.0)
-        )
-        self.conn.commit()
-
-    def deposit(self, amount):
-        # Add money to the account
-        self.cursor.execute(
-            'UPDATE accounts SET balance = balance + ? WHERE user_id = ?',
-            (amount, self.user_id)
-        )
-        # Save transaction
-        self.cursor.execute(
-            'INSERT INTO transactions (user_id, amount, type) VALUES (?, ?, ?)',
-            (self.user_id, amount, 'deposit')
-        )
-        self.conn.commit()
-
-    def withdraw(self, amount):
-        # Check balance before withdrawing
-        current_balance = self.get_balance()
-        if amount <= current_balance:
-            self.cursor.execute(
-                'UPDATE accounts SET balance = balance - ? WHERE user_id = ?',
-                (amount, self.user_id)
-            )
-            self.cursor.execute(
-                'INSERT INTO transactions (user_id, amount, type) VALUES (?, ?, ?)',
-                (self.user_id, amount, 'withdraw')
-            )
-            self.conn.commit()
+        choice = input("Choose an option: ")
+        if choice == "1":
+            print(f"Balance: ${account.get_balance():.2f}")
+        elif choice == "2":
+            try:
+                amount = float(input("Enter amount: "))
+                account.deposit(amount)
+            except ValueError:
+                print("Invalid input.")
+        elif choice == "3":
+            try:
+                amount = float(input("Enter amount: "))
+                account.withdraw(amount)
+            except ValueError:
+                print("Invalid input.")
+        elif choice == "4":
+            account.close()
+            print("Logged out.")
+            break
         else:
-            print("Insufficient funds.")
+            print("Invalid option.")
 
-    def get_balance(self):
-        # Look up balance from the accounts table
-        self.cursor.execute(
-            'SELECT balance FROM accounts WHERE user_id = ?',
-            (self.user_id,)
-        )
-        result = self.cursor.fetchone()
-        return result[0] if result else 0.0
+# Menu shown to admins
+def admin_menu():
+    while True:
+        print("\nAdmin Menu")
+        print("1. Create Account")
+        print("2. Modify Account")
+        print("3. Delete Account")
+        print("4. Logout")
+
+        choice = input("Choose an option: ")
+        if choice == "1":
+            name = input("Enter name: ")
+            pin = getpass("Set PIN: ")
+            create_account(name, pin)
+        elif choice == "2":
+            try:
+                acc = int(input("Enter account number: "))
+                new_name = input("New name (leave blank to skip): ")
+                new_pin = getpass("New PIN (leave blank to skip): ")
+                modify_account(acc, new_name or None, new_pin or None)
+                print("Account updated.")
+            except ValueError:
+                print("Invalid input.")
+        elif choice == "3":
+            try:
+                acc = int(input("Enter account number to delete: "))
+                delete_account(acc)
+                print("Account deleted.")
+            except ValueError:
+                print("Invalid input.")
+        elif choice == "4":
+            print("Logging out...")
+            break
+        else:
+            print("Invalid option.")
+
+# Login prompt for all users
+def login():
+    try:
+        acc_num = int(input("Account number: "))
+        pin = getpass("PIN: ")
+        if user := authenticate(acc_num, pin):
+            name = user[1]
+            is_admin = user[4]
+            if is_admin:
+                print(f"Welcome Admin {name}")
+                admin_menu()
+            else:
+                customer_menu(acc_num, name)
+        else:
+            print("Invalid credentials.")
+    except ValueError:
+        print("Invalid input.")
+
+# App entry point
+if __name__ == "__main__":
+    initialize_database()
+    print("Welcome to the Online Banking System")
+    while True:
+        print("\n1. Login")
+        print("2. Exit")
+        choice = input("Choose: ")
+        if choice == "1":
+            login()
+        elif choice == "2":
+            print("Goodbye.")
+            break
+        else:
+            print("Invalid option.")
